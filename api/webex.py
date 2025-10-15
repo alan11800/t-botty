@@ -2,19 +2,38 @@
 import os, json, re, requests
 from http.server import BaseHTTPRequestHandler
 from datetime import date, timedelta
+import re
 
 TOKEN = os.environ["WEBEX_BOT_TOKEN"]
 API = "https://webexapis.com/v1"
 
+def business_days_before(d: date, n: int) -> date:
+    """
+    Return the date that is n business days before d (Mon–Fri only).
+    Example: if d is a Monday and n=1 -> previous Friday.
+    """
+    cur = d
+    remaining = n
+    while remaining > 0:
+        cur = cur - timedelta(days=1)
+        if cur.weekday() < 5:  # 0=Mon ... 4=Fri, 5=Sat, 6=Sun
+            remaining -= 1
+    return cur
+
 def timeline_from(text: str):
+    # expect DD/MM/YYYY (kept simple on purpose)
     m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", text)
-    if not m: return None
+    if not m:
+        return None
     d, mth, y = map(int, m.groups())
     event = date(y, mth, d)
-    t3  = (event - timedelta(days=21)).strftime("%d/%m")
-    t2  = (event - timedelta(days=14)).strftime("%d/%m")
-    t1  = (event - timedelta(days=7)).strftime("%d/%m")
-    t3d = (event - timedelta(days=3)).strftime("%d/%m")
+
+    # T-3w, T-2w, T-1w are now "business weeks" (15, 10, 5 business days)
+    t3  = business_days_before(event, 15).strftime("%d/%m")
+    t2  = business_days_before(event, 10).strftime("%d/%m")
+    t1  = business_days_before(event, 5).strftime("%d/%m")
+    t3d = business_days_before(event, 3).strftime("%d/%m")
+
     return f"**T3_{t3}** | **T2_{t2}** | **T1_{t1}** | **T3d {t3d}**"
 
 def get_message(mid):
